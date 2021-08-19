@@ -7,8 +7,8 @@ use controller_fw as _;
 
 #[rtic::app(device = stm32f1xx_hal::pac, peripherals = true, dispatchers = [RTCALARM, USBWakeup, FSMC, SDIO, CAN_RX1, CAN_SCE, USB_HP_CAN_TX, USB_LP_CAN_RX0])]
 mod app {
-    use controller_fw::board::startup::{self, WheelsType, SteeringType};
     use controller_fw::board::clock::RTICMonotonic;
+    use controller_fw::board::startup::{self, SteeringType, WheelsType};
     use heapless::Deque;
     use rtic::rtic_monotonic::Milliseconds;
     use stm32f1xx_hal::prelude::*;
@@ -34,10 +34,7 @@ mod app {
         defmt::info!("init complete");
 
         (
-            Shared {
-                wheels,
-                steering
-            },
+            Shared { wheels, steering },
             Local {
                 txbuf: Deque::new(),
             },
