@@ -7,6 +7,7 @@ use controller_fw as _;
 
 #[rtic::app(device = stm32f1xx_hal::pac, peripherals = true, dispatchers = [RTCALARM, USBWakeup, FSMC, SDIO, CAN_RX1, CAN_SCE, USB_HP_CAN_TX, USB_LP_CAN_RX0])]
 mod app {
+    use controller_fw::board::analog::Analog;
     use controller_fw::board::clock::RTICMonotonic;
     use controller_fw::board::startup::{self, Steering, Wheels};
     use rtic::rtic_monotonic::Milliseconds;
@@ -19,6 +20,7 @@ mod app {
     struct Shared {
         wheels: Wheels,
         steering: Steering,
+        analog: Analog,
     }
 
     #[local]
@@ -26,11 +28,11 @@ mod app {
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
-        let (wheels, steering, monotonic) = startup::startup(cx.core, cx.device);
+        let (wheels, steering, analog, monotonic) = startup::startup(cx.core, cx.device);
         defmt::info!("init complete");
 
         (
-            Shared { wheels, steering },
+            Shared { wheels, steering, analog },
             Local {},
             init::Monotonics(monotonic),
         )

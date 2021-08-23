@@ -1,5 +1,6 @@
 /// Board startup routines.
 use super::clock;
+use crate::board::analog::Analog;
 use controller_core::board::motion::{Steering as GenericSteering, Wheels as GenericWheels};
 use cortex_m::Peripherals as CorePeripherals;
 use stm32f1xx_hal::{
@@ -53,7 +54,7 @@ pub type Steering = GenericSteering<
 pub fn startup(
     mut core: CorePeripherals,
     periph: pac::Peripherals,
-) -> (Wheels, Steering, clock::RTICMonotonic) {
+) -> (Wheels, Steering, Analog, clock::RTICMonotonic) {
     let mut afio = periph.AFIO.constrain();
     let flash = periph.FLASH.constrain();
     let rcc = periph.RCC.constrain();
@@ -127,7 +128,14 @@ pub fn startup(
         Steering::new(servo_ctrl_pwm, Channel::C1)
     };
 
+    // Analog sensors initialization.
+    let analog = {
+        let vin = gpioc.pc4.into_analog(&mut gpioc.crl);
+
+        Analog::new(vin, periph.ADC1, clocks)
+    };
+
     // Monotonic clock initialization.
     let monotonic = clock::monotonic_setup(&mut core.DCB, core.DWT, core.SYST, clocks.sysclk().0);
-    (wheels, steering, monotonic)
+    (wheels, steering, analog, monotonic)
 }
