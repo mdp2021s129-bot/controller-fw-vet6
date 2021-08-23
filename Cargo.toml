@@ -22,6 +22,10 @@ nb = "1.0.0"
 fixed = "1.9.0"
 micromath = "2.0.0"
 qei = "1.0.2"
+hdcomm-core = { git = "ssh://git@github.com/mdp2021s129-bot/hdcomm.git", branch = "main" }
+hdcomm-device = { git = "ssh://git@github.com/mdp2021s129-bot/hdcomm.git", branch = "main" }
+stable_deref_trait = { version = "1.2.0", default-features = false }
+postcard = "0.7.2"
 
 # hdcomm-core = { path = "../../hdcomm/hdcomm-core" }
 

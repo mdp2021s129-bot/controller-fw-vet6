@@ -4,12 +4,13 @@ use crate::board::analog::Analog;
 use controller_core::board::motion::{Steering as GenericSteering, Wheels as GenericWheels};
 use cortex_m::Peripherals as CorePeripherals;
 use stm32f1xx_hal::{
+    dma,
     gpio::{Alternate, ErasedPin, Floating, Input, Output, PushPull},
     pac,
     prelude::*,
     pwm::Channel,
     qei::QeiOptions,
-    timer,
+    serial, timer,
 };
 
 pub type Wheels = GenericWheels<
@@ -50,11 +51,14 @@ pub type Steering = GenericSteering<
     >,
 >;
 
+pub type DhTx = dma::TxDma<serial::Tx<stm32f1xx_hal::pac::USART1>, stm32f1xx_hal::dma::dma1::C4>;
+pub type HdRx = dma::RxDma<serial::Rx<stm32f1xx_hal::pac::USART1>, stm32f1xx_hal::dma::dma1::C5>;
+
 /// Starts up the board, returning resources provided by it.
 pub fn startup(
     mut core: CorePeripherals,
     periph: pac::Peripherals,
-) -> (Wheels, Steering, Analog, clock::RTICMonotonic) {
+) -> (Wheels, Steering, Analog, DhTx, HdRx, clock::RTICMonotonic) {
     let mut afio = periph.AFIO.constrain();
     let flash = periph.FLASH.constrain();
     let rcc = periph.RCC.constrain();
@@ -68,6 +72,9 @@ pub fn startup(
     let mut gpioc = periph.GPIOC.split();
     let mut gpioe = periph.GPIOE.split();
 
+    // DMA1 initialization
+    let dma1 = periph.DMA1.split();
+
     // Motor control initialization
     let wheels = {
         let in1_l = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
@@ -80,7 +87,7 @@ pub fn startup(
         let pwm_r = gpioc.pc8.into_alternate_push_pull(&mut gpioc.crh);
         let pwm = timer::Timer::tim8(periph.TIM8, &clocks).pwm((pwm_l, pwm_r), 20.khz());
 
-        let (_, swo, _) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
+        afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
         let enc_l = {
             let enca_l = gpioa.pa6.into_floating_input(&mut gpioa.crl);
@@ -135,7 +142,34 @@ pub fn startup(
         Analog::new(vin, periph.ADC1, clocks)
     };
 
+    // D -> H UART initialization.
+    let (dh_tx, hd_rx) = {
+        let tx = gpioa.pa9.into_alternate_push_pull(&mut gpioa.crh);
+        let rx = gpioa.pa10.into_floating_input(&mut gpioa.crh);
+        let dh_periph = serial::Serial::usart1(
+            periph.USART1,
+            (tx, rx),
+            &mut afio.mapr,
+            serial::Config {
+                baudrate: 115200.bps(),
+                parity: serial::Parity::ParityNone,
+                stopbits: serial::StopBits::STOP1,
+            },
+            clocks,
+        );
+        let (dh_tx_periph, hd_rx_periph) = dh_periph.split();
+
+        let mut dh_tx = dh_tx_periph.with_dma(dma1.4);
+        dh_tx.channel.listen(dma::Event::TransferComplete);
+
+        let mut hd_rx = hd_rx_periph.with_dma(dma1.5);
+        hd_rx.channel.listen(dma::Event::HalfTransfer);
+        hd_rx.channel.listen(dma::Event::TransferComplete);
+
+        (dh_tx, hd_rx)
+    };
+
     // Monotonic clock initialization.
     let monotonic = clock::monotonic_setup(&mut core.DCB, core.DWT, core.SYST, clocks.sysclk().0);
-    (wheels, steering, analog, monotonic)
+    (wheels, steering, analog, dh_tx, hd_rx, monotonic)
 }
