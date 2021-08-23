@@ -8,8 +8,7 @@ use controller_fw as _;
 #[rtic::app(device = stm32f1xx_hal::pac, peripherals = true, dispatchers = [RTCALARM, USBWakeup, FSMC, SDIO, CAN_RX1, CAN_SCE, USB_HP_CAN_TX, USB_LP_CAN_RX0])]
 mod app {
     use controller_fw::board::clock::RTICMonotonic;
-    use controller_fw::board::startup::{self, SteeringType, WheelsType};
-    use heapless::Deque;
+    use controller_fw::board::startup::{self, Steering, Wheels};
     use rtic::rtic_monotonic::Milliseconds;
     use stm32f1xx_hal::prelude::*;
 
@@ -18,15 +17,12 @@ mod app {
 
     #[shared]
     struct Shared {
-        wheels: WheelsType,
-        steering: SteeringType,
+        wheels: Wheels,
+        steering: Steering,
     }
 
     #[local]
-    struct Local {
-        /// Low-level serial transmit buffer.
-        txbuf: Deque<u8, 128>,
-    }
+    struct Local {}
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -35,9 +31,7 @@ mod app {
 
         (
             Shared { wheels, steering },
-            Local {
-                txbuf: Deque::new(),
-            },
+            Local {},
             init::Monotonics(monotonic),
         )
     }

@@ -1,6 +1,6 @@
 /// Board startup routines.
 use super::clock;
-use controller_core::board::motion::{Steering, Wheels};
+use controller_core::board::motion::{Steering as GenericSteering, Wheels as GenericWheels};
 use cortex_m::Peripherals as CorePeripherals;
 use stm32f1xx_hal::{
     gpio::{Alternate, ErasedPin, Floating, Input, Output, PushPull},
@@ -11,22 +11,14 @@ use stm32f1xx_hal::{
     timer,
 };
 
-pub type WheelsType = Wheels<
+pub type Wheels = GenericWheels<
     stm32f1xx_hal::pwm::Pwm<
         stm32f1xx_hal::pac::TIM8,
         timer::Tim8NoRemap,
-        (stm32f1xx_hal::pwm::C1, stm32f1xx_hal::pwm::C2),
+        (stm32f1xx_hal::pwm::C2, stm32f1xx_hal::pwm::C3),
         (
-            stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRL, 'C', 6_u8>,
             stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRL, 'C', 7_u8>,
-        ),
-    >,
-    stm32f1xx_hal::qei::Qei<
-        stm32f1xx_hal::pac::TIM2,
-        timer::Tim2PartialRemap1,
-        (
-            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRH, 'A', 15_u8>,
-            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'B', 3_u8>,
+            stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'C', 8_u8>,
         ),
     >,
     stm32f1xx_hal::qei::Qei<
@@ -37,15 +29,23 @@ pub type WheelsType = Wheels<
             stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'A', 7_u8>,
         ),
     >,
+    stm32f1xx_hal::qei::Qei<
+        stm32f1xx_hal::pac::TIM4,
+        timer::Tim4NoRemap,
+        (
+            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'B', 6_u8>,
+            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'B', 7_u8>,
+        ),
+    >,
     ErasedPin<Output<PushPull>>,
 >;
 
-pub type SteeringType = Steering<
+pub type Steering = GenericSteering<
     stm32f1xx_hal::pwm::Pwm<
-        stm32f1xx_hal::pac::TIM4,
-        timer::Tim4Remap,
+        stm32f1xx_hal::pac::TIM1,
+        timer::Tim1FullRemap,
         stm32f1xx_hal::pwm::C1,
-        stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'D', 12_u8>,
+        stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'E', 9_u8>,
     >,
 >;
 
@@ -53,7 +53,7 @@ pub type SteeringType = Steering<
 pub fn startup(
     mut core: CorePeripherals,
     periph: pac::Peripherals,
-) -> (WheelsType, SteeringType, clock::RTICMonotonic) {
+) -> (Wheels, Steering, clock::RTICMonotonic) {
     let mut afio = periph.AFIO.constrain();
     let flash = periph.FLASH.constrain();
     let rcc = periph.RCC.constrain();
@@ -63,59 +63,69 @@ pub fn startup(
 
     // GPIO initialization
     let mut gpioa = periph.GPIOA.split();
-    let gpiob = periph.GPIOB.split();
+    let mut gpiob = periph.GPIOB.split();
     let mut gpioc = periph.GPIOC.split();
-    let mut gpiod = periph.GPIOD.split();
+    let mut gpioe = periph.GPIOE.split();
 
     // Motor control initialization
-    let in1_l = gpioa.pa3.into_push_pull_output(&mut gpioa.crl);
-    let in2_l = gpioa.pa2.into_push_pull_output(&mut gpioa.crl);
+    let wheels = {
+        let in1_l = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
+        let in2_l = gpioa.pa5.into_push_pull_output(&mut gpioa.crl);
 
-    let in1_r = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
-    let in2_r = gpioa.pa5.into_push_pull_output(&mut gpioa.crl);
+        let in1_r = gpioe.pe12.into_push_pull_output(&mut gpioe.crh);
+        let in2_r = gpioc.pc5.into_push_pull_output(&mut gpioc.crl);
 
-    let pwm_l = gpioc.pc6.into_alternate_push_pull(&mut gpioc.crl);
-    let pwm_r = gpioc.pc7.into_alternate_push_pull(&mut gpioc.crl);
-    let pwm = timer::Timer::tim8(periph.TIM8, &clocks).pwm((pwm_l, pwm_r), 20.khz());
+        let pwm_l = gpioc.pc7.into_alternate_push_pull(&mut gpioc.crl);
+        let pwm_r = gpioc.pc8.into_alternate_push_pull(&mut gpioc.crh);
+        let pwm = timer::Timer::tim8(periph.TIM8, &clocks).pwm((pwm_l, pwm_r), 20.khz());
 
-    let (enca_l, encb_l, _) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
-    let enca_r = gpioa.pa6.into_floating_input(&mut gpioa.crl);
-    let encb_r = gpioa.pa7.into_floating_input(&mut gpioa.crl);
+        let (_, swo, _) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
 
-    let enc_l = timer::Timer::tim2(periph.TIM2, &clocks).qei(
-        (enca_l, encb_l),
-        &mut afio.mapr,
-        QeiOptions {
-            slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
-            ..Default::default()
-        },
-    );
+        let enc_l = {
+            let enca_l = gpioa.pa6.into_floating_input(&mut gpioa.crl);
+            let encb_l = gpioa.pa7.into_floating_input(&mut gpioa.crl);
+            timer::Timer::tim3(periph.TIM3, &clocks).qei(
+                (enca_l, encb_l),
+                &mut afio.mapr,
+                QeiOptions {
+                    slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
+                    ..Default::default()
+                },
+            )
+        };
 
-    let enc_r = timer::Timer::tim3(periph.TIM3, &clocks).qei(
-        (enca_r, encb_r),
-        &mut afio.mapr,
-        QeiOptions {
-            slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
-            ..Default::default()
-        },
-    );
+        let enc_r = {
+            let enca_r = gpiob.pb6.into_floating_input(&mut gpiob.crl);
+            let encb_r = gpiob.pb7.into_floating_input(&mut gpiob.crl);
+            timer::Timer::tim4(periph.TIM4, &clocks).qei(
+                (enca_r, encb_r),
+                &mut afio.mapr,
+                QeiOptions {
+                    slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
+                    ..Default::default()
+                },
+            )
+        };
 
-    let wheels = Wheels::new(
-        pwm,
-        40000.hz(),
-        [
-            [in1_l.erase(), in2_l.erase()],
-            [in1_r.erase(), in2_r.erase()],
-        ],
-        [Channel::C1, Channel::C2],
-        (enc_l, enc_r),
-    );
+        Wheels::new(
+            pwm,
+            40000.hz(),
+            [
+                [in1_l.erase(), in2_l.erase()],
+                [in1_r.erase(), in2_r.erase()],
+            ],
+            [Channel::C2, Channel::C3],
+            (enc_l, enc_r),
+        )
+    };
 
     // Steering initialization.
-    let servo_ctrl = gpiod.pd12.into_alternate_push_pull(&mut gpiod.crh);
-    let servo_ctrl_pwm =
-        timer::Timer::tim4(periph.TIM4, &clocks).pwm(servo_ctrl, &mut afio.mapr, 100.hz());
-    let steering = Steering::new(servo_ctrl_pwm, Channel::C1);
+    let steering = {
+        let servo_ctrl = gpioe.pe9.into_alternate_push_pull(&mut gpioe.crh);
+        let servo_ctrl_pwm =
+            timer::Timer::tim1(periph.TIM1, &clocks).pwm(servo_ctrl, &mut afio.mapr, 100.hz());
+        Steering::new(servo_ctrl_pwm, Channel::C1)
+    };
 
     // Monotonic clock initialization.
     let monotonic = clock::monotonic_setup(&mut core.DCB, core.DWT, core.SYST, clocks.sysclk().0);
