@@ -26,6 +26,9 @@ hdcomm-core = { git = "ssh://git@github.com/mdp2021s129-bot/hdcomm.git", branch 
 hdcomm-device = { git = "ssh://git@github.com/mdp2021s129-bot/hdcomm.git", branch = "main" }
 stable_deref_trait = { version = "1.2.0", default-features = false }
 postcard = "0.7.2"
+smlang = "0.4.0"
+pid = "3.0.0"
+s_curve_tiny = { git = "https://github.com/shenghaoyang/s_curve.git", branch = "big_no_std_hack" }
 
 # hdcomm-core = { path = "../../hdcomm/hdcomm-core" }
 
