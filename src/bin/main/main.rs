@@ -10,6 +10,7 @@ mod app {
     use crate::hdcomm::{
         self, dh_tx, hd_rx, hd_rx_poll, DhDmaState, HdRxQueueConsumer, HdRxQueueProducer, RxCircDma,
     };
+    use controller_core::board::lrtimer::LrTimer;
     use controller_fw::board::analog::Analog;
     use controller_fw::board::clock::RTICMonotonic;
     use controller_fw::board::startup::{self, DhTx, Steering, Wheels};
@@ -24,6 +25,7 @@ mod app {
         wheels: Wheels,
         steering: Steering,
         analog: Analog,
+        lrtimer: LrTimer,
     }
 
     #[local]
@@ -41,7 +43,7 @@ mod app {
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
-        let (wheels, steering, analog, dh_tx, hd_rx, monotonic) =
+        let (wheels, steering, analog, dh_tx, hd_rx, lrtimer, monotonic) =
             startup::startup(cx.core, cx.device);
         let hd_rx_pair: (HdRxQueueProducer, HdRxQueueConsumer) =
             hdcomm::receive_queue_split().unwrap();
@@ -55,6 +57,7 @@ mod app {
                 wheels,
                 steering,
                 analog,
+                lrtimer,
             },
             Local {
                 dh_tx: DhDmaState::Idle(
@@ -75,6 +78,12 @@ mod app {
         loop {
             // TODO: Port over & clean up prototype message receive state machine.
         }
+    }
+
+    /// LrTimer overflow update handler.
+    #[task(binds = TIM2, shared = [lrtimer])]
+    fn lrtimer_update(mut cx: lrtimer_update::Context) {
+        cx.shared.lrtimer.lock(|t| t.isr());
     }
 
     // Out-of-module tasks.
