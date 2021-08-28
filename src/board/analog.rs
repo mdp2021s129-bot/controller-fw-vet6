@@ -19,6 +19,9 @@ pub const VIN_DIVIDE_RATIO: u16 = 11;
 /// In units of volts.
 pub type Voltage = FixedU32<fixed::types::extra::U16>;
 
+/// Number of least significant bits per volt.
+pub const LSBS_PER_VOLT: Voltage = Voltage::from_be_bytes([0x04, 0xd9, 0x36, 0x4e]);
+
 /// Abstraction over all analog sensors of the robot.
 ///
 /// Provides only the VIN reading for now.
@@ -40,8 +43,8 @@ impl Analog {
     /// Read the voltage level of the VIN bus.
     ///
     /// Blocking.
-    pub fn read(&mut self) -> Voltage {
+    pub fn vin(&mut self) -> Voltage {
         let word: u16 = block!(self.adc.read(&mut self.vin)).unwrap();
-        Voltage::from(word) * Voltage::from(VIN_DIVIDE_RATIO)
+        (Voltage::from(word) / LSBS_PER_VOLT) * Voltage::from(VIN_DIVIDE_RATIO)
     }
 }
