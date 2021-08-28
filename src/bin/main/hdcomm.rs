@@ -113,7 +113,7 @@ pub fn enqueue_device_to_host(message: Message) -> Result<(), Message> {
     match DH_TX_QUEUE.enqueue(message) {
         Ok(_) => {
             // Pend channel so that the buffer gets queued for transmission.
-            rtic::pend(Interrupt::DMA1_CHANNEL4);
+            rtic::pend(Interrupt::DMA1_CHANNEL2);
             Ok(())
         }
         Err(e) => Err(e),
@@ -214,7 +214,7 @@ pub fn hd_rx(cx: crate::app::hd_rx::Context) {
 ///
 /// Triggered every 100ms to poll the receive DMA.
 pub fn hd_rx_poll(_: crate::app::hd_rx_poll::Context) {
-    rtic::pend(Interrupt::DMA1_CHANNEL5);
+    rtic::pend(Interrupt::DMA1_CHANNEL3);
     // Start self again to make this periodic.
     crate::app::hd_rx_poll::spawn_after(HD_RX_POLL_INTERVAL).unwrap();
 }

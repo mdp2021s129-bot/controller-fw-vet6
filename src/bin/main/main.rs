@@ -113,6 +113,7 @@ mod app {
                 };
 
                 let id = rpc.id;
+                defmt::info!("HD RX: RPC ID {}", id);
                 let reply_payload = match rpc.payload {
                     RPCPayload::PingReq(_) => Some(RPCPayload::PingRep(())),
                     RPCPayload::MoveReq(mv) => {
@@ -175,10 +176,10 @@ mod app {
 
     // Out-of-module tasks.
     extern "Rust" {
-        #[task(binds = DMA1_CHANNEL4, local = [dh_tx])]
+        #[task(binds = DMA1_CHANNEL2, local = [dh_tx])]
         fn dh_tx(_: dh_tx::Context);
 
-        #[task(binds = DMA1_CHANNEL5, local = [hd_rx, hd_rx_producer, accum: hdcomm_device::Accumulator = hdcomm_device::Accumulator::new()])]
+        #[task(binds = DMA1_CHANNEL3, local = [hd_rx, hd_rx_producer, accum: hdcomm_device::Accumulator = hdcomm_device::Accumulator::new()])]
         fn hd_rx(_: hd_rx::Context);
 
         #[task()]

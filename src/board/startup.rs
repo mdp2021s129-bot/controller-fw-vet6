@@ -52,8 +52,8 @@ pub type Steering = GenericSteering<
     >,
 >;
 
-pub type DhTx = dma::TxDma<serial::Tx<stm32f1xx_hal::pac::USART1>, stm32f1xx_hal::dma::dma1::C4>;
-pub type HdRx = dma::RxDma<serial::Rx<stm32f1xx_hal::pac::USART1>, stm32f1xx_hal::dma::dma1::C5>;
+pub type DhTx = dma::TxDma<serial::Tx<stm32f1xx_hal::pac::USART3>, stm32f1xx_hal::dma::dma1::C2>;
+pub type HdRx = dma::RxDma<serial::Rx<stm32f1xx_hal::pac::USART3>, stm32f1xx_hal::dma::dma1::C3>;
 
 /// Starts up the board, returning resources provided by it.
 pub fn startup(
@@ -153,10 +153,10 @@ pub fn startup(
 
     // D -> H UART initialization.
     let (dh_tx, hd_rx) = {
-        let tx = gpioa.pa9.into_alternate_push_pull(&mut gpioa.crh);
-        let rx = gpioa.pa10.into_floating_input(&mut gpioa.crh);
-        let dh_periph = serial::Serial::usart1(
-            periph.USART1,
+        let tx = gpioc.pc10.into_alternate_push_pull(&mut gpioc.crh);
+        let rx = gpioc.pc11.into_floating_input(&mut gpioc.crh);
+        let dh_periph = serial::Serial::usart3(
+            periph.USART3,
             (tx, rx),
             &mut afio.mapr,
             serial::Config {
@@ -168,10 +168,10 @@ pub fn startup(
         );
         let (dh_tx_periph, hd_rx_periph) = dh_periph.split();
 
-        let mut dh_tx = dh_tx_periph.with_dma(dma1.4);
+        let mut dh_tx = dh_tx_periph.with_dma(dma1.2);
         dh_tx.channel.listen(dma::Event::TransferComplete);
 
-        let mut hd_rx = hd_rx_periph.with_dma(dma1.5);
+        let mut hd_rx = hd_rx_periph.with_dma(dma1.3);
         hd_rx.channel.listen(dma::Event::HalfTransfer);
         hd_rx.channel.listen(dma::Event::TransferComplete);
 
