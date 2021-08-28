@@ -46,7 +46,7 @@ mod app {
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
-        let (wheels, steering, analog, dh_tx, hd_rx, lrtimer, monotonic) =
+        let (wheels, steering, mut analog, dh_tx, hd_rx, lrtimer, monotonic) =
             startup::startup(cx.core, cx.device);
 
         let hd_rx_pair: (HdRxQueueProducer, HdRxQueueConsumer) =
@@ -61,7 +61,7 @@ mod app {
                 p_limit: 1.,
                 i_limit: 1.,
                 d_limit: 0.,
-                output_limit: 1.,
+                output_limit: 0.,
             };
             let ctrl_context = ControllerContext::new(
                 &PidParamUpdateReqBody {
@@ -74,8 +74,8 @@ mod app {
             Controller::new(ctrl_context)
         };
 
+        defmt::info!("VIN: {:?} V", defmt::Debug2Format(&analog.vin()));
         defmt::info!("init complete");
-
         (
             Shared {
                 analog,
