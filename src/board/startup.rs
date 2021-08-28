@@ -47,8 +47,8 @@ pub type Steering = GenericSteering<
     stm32f1xx_hal::pwm::Pwm<
         stm32f1xx_hal::pac::TIM1,
         timer::Tim1FullRemap,
-        stm32f1xx_hal::pwm::C1,
-        stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'E', 9_u8>,
+        stm32f1xx_hal::pwm::C2,
+        stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'E', 11_u8>,
     >,
 >;
 
@@ -138,10 +138,10 @@ pub fn startup(
 
     // Steering initialization.
     let steering = {
-        let servo_ctrl = gpioe.pe9.into_alternate_push_pull(&mut gpioe.crh);
+        let servo_ctrl = gpioe.pe11.into_alternate_push_pull(&mut gpioe.crh);
         let servo_ctrl_pwm =
-            timer::Timer::tim1(periph.TIM1, &clocks).pwm(servo_ctrl, &mut afio.mapr, 100.hz());
-        Steering::new(servo_ctrl_pwm, Channel::C1)
+            timer::Timer::tim1(periph.TIM1, &clocks).pwm(servo_ctrl, &mut afio.mapr, 50.hz());
+        Steering::new(servo_ctrl_pwm, Channel::C2)
     };
 
     // Analog sensors initialization.
