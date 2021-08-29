@@ -16,7 +16,7 @@ mod app {
     use controller_core::board::lrtimer::LrTimer;
     use controller_fw::board::analog::Analog;
     use controller_fw::board::clock::RTICMonotonic;
-    use controller_fw::board::startup::{self, DhTx};
+    use controller_fw::board::startup::{self, Ahrs, DhTx};
     use cortex_m::singleton;
     use hdcomm_core::rpc::{MoveRepBody, PidParamUpdateReqBody, PidParams};
     use stm32f1xx_hal::prelude::*;
@@ -42,11 +42,14 @@ mod app {
         hd_rx_consumer: HdRxQueueConsumer,
         /// Host to device message queue (ISR -> idle)
         hd_rx_producer: HdRxQueueProducer,
+
+        /// Onboard MPU9250 AHRS.
+        ahrs: Ahrs,
     }
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
-        let (wheels, steering, mut analog, dh_tx, hd_rx, lrtimer, monotonic) =
+        let (wheels, steering, mut analog, dh_tx, hd_rx, ahrs, lrtimer, monotonic) =
             startup::startup(cx.core, cx.device);
 
         let hd_rx_pair: (HdRxQueueProducer, HdRxQueueConsumer) =
@@ -74,7 +77,6 @@ mod app {
             Controller::new(ctrl_context)
         };
 
-        defmt::info!("VIN: {:?} V", defmt::Debug2Format(&analog.vin()));
         defmt::info!("init complete");
         (
             Shared {
@@ -91,6 +93,7 @@ mod app {
                     .circ_read_granular(singleton!(: crate::hdcomm::RxBuf = [0; 516]).unwrap()),
                 hd_rx_consumer: hd_rx_pair.1,
                 hd_rx_producer: hd_rx_pair.0,
+                ahrs,
             },
             init::Monotonics(monotonic),
         )

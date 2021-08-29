@@ -29,9 +29,7 @@ postcard = "0.7.2"
 smlang = "0.4.0"
 pid = "3.0.0"
 s_curve_tiny = { git = "https://github.com/shenghaoyang/s_curve.git", branch = "big_no_std_hack" }
-
-# hdcomm-core = { path = "../../hdcomm/hdcomm-core" }
-
+mpu9250 = { version = "0.24.0", features = ["i2c"] }
 
 [features]
 # set logging levels here

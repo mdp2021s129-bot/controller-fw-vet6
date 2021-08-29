@@ -6,54 +6,62 @@ use controller_core::board::motion::{Steering as GenericSteering, Wheels as Gene
 use cortex_m::Peripherals as CorePeripherals;
 use stm32f1xx_hal::{
     dma,
-    gpio::{Alternate, ErasedPin, Floating, Input, Output, PushPull},
-    pac,
+    gpio::{Alternate, ErasedPin, Floating, Input, OpenDrain, Output, Pin, PushPull, CRH, CRL},
+    i2c, pac,
     prelude::*,
-    pwm::Channel,
-    qei::QeiOptions,
+    pwm::{self, Channel},
+    qei::{self, QeiOptions},
     serial, timer,
 };
 
 pub type Wheels = GenericWheels<
-    stm32f1xx_hal::pwm::Pwm<
-        stm32f1xx_hal::pac::TIM8,
+    pwm::Pwm<
+        pac::TIM8,
         timer::Tim8NoRemap,
-        (stm32f1xx_hal::pwm::C2, stm32f1xx_hal::pwm::C3),
+        (pwm::C2, pwm::C3),
         (
-            stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRL, 'C', 7_u8>,
-            stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'C', 8_u8>,
+            Pin<Alternate<PushPull>, CRL, 'C', 7_u8>,
+            Pin<Alternate<PushPull>, CRH, 'C', 8_u8>,
         ),
     >,
-    stm32f1xx_hal::qei::Qei<
-        stm32f1xx_hal::pac::TIM3,
+    qei::Qei<
+        pac::TIM3,
         timer::Tim3NoRemap,
         (
-            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'A', 6_u8>,
-            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'A', 7_u8>,
+            Pin<Input<Floating>, CRL, 'A', 6_u8>,
+            Pin<Input<Floating>, CRL, 'A', 7_u8>,
         ),
     >,
-    stm32f1xx_hal::qei::Qei<
-        stm32f1xx_hal::pac::TIM4,
+    qei::Qei<
+        pac::TIM4,
         timer::Tim4NoRemap,
         (
-            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'B', 6_u8>,
-            stm32f1xx_hal::gpio::Pin<Input<Floating>, stm32f1xx_hal::gpio::CRL, 'B', 7_u8>,
+            Pin<Input<Floating>, CRL, 'B', 6_u8>,
+            Pin<Input<Floating>, CRL, 'B', 7_u8>,
         ),
     >,
     ErasedPin<Output<PushPull>>,
 >;
 
 pub type Steering = GenericSteering<
-    stm32f1xx_hal::pwm::Pwm<
-        stm32f1xx_hal::pac::TIM1,
-        timer::Tim1FullRemap,
-        stm32f1xx_hal::pwm::C2,
-        stm32f1xx_hal::gpio::Pin<Alternate<PushPull>, stm32f1xx_hal::gpio::CRH, 'E', 11_u8>,
-    >,
+    pwm::Pwm<pac::TIM1, timer::Tim1FullRemap, pwm::C2, Pin<Alternate<PushPull>, CRH, 'E', 11_u8>>,
 >;
 
-pub type DhTx = dma::TxDma<serial::Tx<stm32f1xx_hal::pac::USART3>, stm32f1xx_hal::dma::dma1::C2>;
-pub type HdRx = dma::RxDma<serial::Rx<stm32f1xx_hal::pac::USART3>, stm32f1xx_hal::dma::dma1::C3>;
+pub type DhTx = dma::TxDma<serial::Tx<pac::USART3>, dma::dma1::C2>;
+pub type HdRx = dma::RxDma<serial::Rx<pac::USART3>, dma::dma1::C3>;
+
+pub type Ahrs = mpu9250::Mpu9250<
+    mpu9250::I2cDevice<
+        i2c::BlockingI2c<
+            pac::I2C1,
+            (
+                Pin<Alternate<OpenDrain>, CRH, 'B', 8_u8>,
+                Pin<Alternate<OpenDrain>, CRH, 'B', 9_u8>,
+            ),
+        >,
+    >,
+    mpu9250::Marg,
+>;
 
 /// Starts up the board, returning resources provided by it.
 pub fn startup(
@@ -65,6 +73,7 @@ pub fn startup(
     Analog,
     DhTx,
     HdRx,
+    Ahrs,
     LrTimer,
     clock::RTICMonotonic,
 ) {
@@ -179,9 +188,39 @@ pub fn startup(
     };
 
     // LrTimer initialization.
-    let lrtimer = LrTimer::new(periph.TIM2, &clocks);
+    //
+    // Initialized before the MPU because we need to use it for delays.
+    let mut lrtimer = LrTimer::new(periph.TIM2, &clocks);
+
+    // MPU9250 initialization.
+    // We're not using the interrupt for now - we poll it at 200Hz and the
+    // sample rate should be high enough such that
+    let mpu9250 = {
+        let sda = gpiob.pb9.into_alternate_open_drain(&mut gpiob.crh);
+        let scl = gpiob.pb8.into_alternate_open_drain(&mut gpiob.crh);
+        let i2c = i2c::I2c::i2c1(
+            periph.I2C1,
+            (scl, sda),
+            &mut afio.mapr,
+            i2c::Mode::standard(400_000.hz()),
+            clocks,
+        )
+        .blocking_default(clocks);
+        let mut mpu9250 =
+            mpu9250::Mpu9250::marg(i2c, &mut lrtimer, &mut mpu9250::MpuConfig::marg()).unwrap();
+        if mpu9250
+            .calibrate_at_rest::<_, [f32; 3]>(&mut lrtimer)
+            .is_err()
+        {
+            defmt::error!("mpu9250: failed to perform bias calibration");
+            crate::exit();
+        }
+        mpu9250
+    };
 
     // Monotonic clock initialization.
     let monotonic = clock::monotonic_setup(&mut core.DCB, core.DWT, core.SYST, clocks.sysclk().0);
-    (wheels, steering, analog, dh_tx, hd_rx, lrtimer, monotonic)
+    (
+        wheels, steering, analog, dh_tx, hd_rx, mpu9250, lrtimer, monotonic,
+    )
 }
