@@ -2,4 +2,3 @@
 pub mod analog;
 pub mod clock;
 pub mod startup;
-pub mod ultrasound;

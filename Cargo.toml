@@ -29,7 +29,10 @@ postcard = "0.7.2"
 smlang = "0.4.0"
 pid = "3.0.0"
 s_curve_tiny = { git = "https://github.com/shenghaoyang/s_curve.git", branch = "big_no_std_hack" }
-mpu9250 = { version = "0.24.0", features = ["i2c"] }
+mpu9250 = { version = "0.24.0", features = ["i2c", "dmp"] }
+fixed-macro = { git = "https://github.com/shenghaoyang/fixed-macro.git", branch = "no_std" }
+debugless-unwrap = "0.0.4"
+embedded-time = "0.12.0"
 
 [features]
 # set logging levels here
