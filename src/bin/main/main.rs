@@ -82,17 +82,10 @@ mod app {
 
         // Trajectory controller init.
         let trajectory_controller = {
-            let pid_params = PidParams {
-                kp: 1e-3,
-                ki: 0.0,
-                kd: 0.0,
-                p_limit: 1.,
-                i_limit: 0.,
-                d_limit: 0.,
-                output_limit: 0.01,
-            };
+            // These parameters are all-zeroes.
+            // The PID parameters must be updated by the host AP.
             let initial_params = PidParamUpdateReqBody {
-                params: [pid_params.clone(), pid_params],
+                params: [PidParams::default(), PidParams::default()],
                 update_interval_ms: 10,
             };
             Controller::new(&initial_params, wheels, steering)
