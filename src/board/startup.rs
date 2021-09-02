@@ -244,12 +244,17 @@ pub fn startup(
             &mut mpu9250::MpuConfig::marg().mag_scale(mpu9250::MagScale::_16BITS),
         )
         .unwrap();
-        if let Err(e) = mpu9250.calibrate_at_rest::<_, [f32; 3]>(&mut lrtimer) {
-            defmt::error!(
-                "mpu9250: failed to perform bias calibration: {:?}",
-                defmt::Debug2Format(&e)
-            );
-            crate::exit();
+        match mpu9250.calibrate_at_rest::<_, [f32; 3]>(&mut lrtimer) {
+            Err(e) => {
+                defmt::error!(
+                    "mpu9250: failed to perform bias calibration: {:?}",
+                    defmt::Debug2Format(&e)
+                );
+                crate::exit();
+            }
+            Ok(acc_bias) => {
+                defmt::info!("mpu9250: acc bias: {}", acc_bias);
+            }
         }
         mpu9250
     };

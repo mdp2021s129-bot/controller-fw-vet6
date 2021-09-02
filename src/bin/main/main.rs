@@ -22,7 +22,7 @@ mod app {
     use cortex_m::singleton;
     use hdcomm_core::rpc::{
         MoveRepBody, MoveStatusRepBody, PidParamUpdateRepBody, PidParamUpdateReqBody, PidParams,
-        PingRepBody,
+        PingRepBody, RawTeleOpRepBody,
     };
     use rtic::time::duration::Milliseconds;
     use stm32f1xx_hal::{gpio::ExtiPin, prelude::*};
@@ -94,6 +94,8 @@ mod app {
         // Front distance sensor init.
         let front_distance = Sr04::new(front_distance_trig);
         front_sensor_auto_trigger::spawn().unwrap();
+
+        // sensor_dump_test::spawn_after(Milliseconds(1000_u32)).unwrap();
 
         defmt::info!("init complete");
         (
@@ -187,6 +189,17 @@ mod app {
                             PidParamUpdateRepBody::Busy
                         },
                     )),
+                    RPCPayload::RawTeleOpReq(req) => Some(RPCPayload::RawTeleOpRep(
+                        if cx
+                            .shared
+                            .trajectory_controller
+                            .lock(|c| c.raw_control(&req))
+                        {
+                            RawTeleOpRepBody::Applied
+                        } else {
+                            RawTeleOpRepBody::Busy
+                        },
+                    )),
                     _ => None,
                 };
 
@@ -266,23 +279,31 @@ mod app {
     /// Sensor dump handler.
     #[task(local = [ahrs, analog])]
     fn sensor_dump_test(cx: sensor_dump_test::Context) {
-        sensor_dump_test::spawn_after(Milliseconds(1000_u32)).unwrap();
+        sensor_dump_test::spawn_after(Milliseconds(10_u32)).unwrap();
 
         let ahrs: &mut Ahrs = cx.local.ahrs;
         let readings: Result<mpu9250::MargMeasurements<[f32; 3]>, _> = ahrs.all();
         if let Ok(meas) = readings {
-            defmt::info!(
-                "AHRS: A: {}, G: {}, M: {}, T: {}",
-                meas.accel,
-                meas.gyro,
-                meas.mag,
-                meas.temp
+            defmt::debug!(
+                "AHRS {},{},{},{},{},{},{},{},{},{}",
+                crate::app::monotonics::Dwt::now()
+                    .duration_since_epoch()
+                    .integer(),
+                meas.accel[0],
+                meas.accel[1],
+                meas.accel[2],
+                meas.gyro[0],
+                meas.gyro[1],
+                meas.gyro[2],
+                meas.mag[0],
+                meas.mag[1],
+                meas.mag[2],
             );
         }
 
         let analog: &mut Analog = cx.local.analog;
         let vin = analog.vin();
-        defmt::info!("VIN: {:?} V", defmt::Debug2Format(&vin));
+        defmt::debug!("VIN: {:?}", defmt::Debug2Format(&vin));
     }
 
     // Out-of-module tasks.

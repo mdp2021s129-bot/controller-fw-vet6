@@ -2,7 +2,7 @@ use controller_core::board::motion::{Angle, Duty};
 use controller_core::board::{lrtimer::Instant as LrInstant, motion::Wheel};
 use controller_fw::board::startup::{Steering, Wheels};
 use debugless_unwrap::DebuglessUnwrap;
-use hdcomm_core::rpc::{MoveReqBody, PidParamUpdateReqBody, PidParams};
+use hdcomm_core::rpc::{MoveReqBody, PidParamUpdateReqBody, PidParams, RawTeleOpReqBody};
 /// Board trajectory control.
 use pid::Pid;
 use rtic::rtic_monotonic::Milliseconds;
@@ -222,6 +222,8 @@ impl Controller {
         )
         .debugless_unwrap();
 
+        // Stop wheels just in case a teleop was being performed.
+        self.stop_wheels();
         self.steering.set(Angle::from_num(req.steering));
         let mut move_ctx = MoveContext::new(req, time);
         move_ctx.spawn_handle = Some(handle);
@@ -278,8 +280,31 @@ impl Controller {
     }
 
     /// Polls the encoders to update their positions.
-    fn poll_encoders(&mut self) {
-        self.wheels.read_and_update_positions().unwrap();
+    pub fn poll_encoders(&mut self) -> [i64; 2] {
+        self.wheels.read_and_update_positions().unwrap()
+    }
+
+    /// Sends raw commands to the steering servo & drive wheels.
+    ///
+    /// Returns `true` if the command was successful, `false` if not.
+    pub fn raw_control(&mut self, req: &RawTeleOpReqBody) -> bool {
+        if let State::Idle = self.state {
+            if let Some(position) = req.steering {
+                self.steering.set(Angle::from_num(position))
+            }
+
+            if let Some(duty) = req.wheel_l {
+                self.wheels.drive(Wheel::LEFT, Duty::from_num(duty));
+            }
+
+            if let Some(duty) = req.wheel_r {
+                self.wheels.drive(Wheel::RIGHT, Duty::from_num(duty));
+            }
+
+            true
+        } else {
+            false
+        }
     }
 
     /// Stops both wheels by putting them in brake mode.
