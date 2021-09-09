@@ -1,6 +1,7 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 # TODO(2) replace `$CHIP` with your chip's name (see `probe-run --list-chips` output)
-runner = "probe-run --chip STM32F103VE"
+runner = "probe-run --speed 4000 --chip STM32F103VE"
+#runner = "gdb-multiarch -q -x jlink.gdb"
 rustflags = [
   "-C", "linker=flip-link",
   "-C", "link-arg=-Tlink.x",
