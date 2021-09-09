@@ -10,7 +10,7 @@ use controller_fw as _;
 #[rtic::app(device = stm32f1xx_hal::pac, peripherals = true, dispatchers = [RTCALARM, FSMC, SDIO, CAN_RX1, CAN_SCE, USB_HP_CAN_TX, USB_LP_CAN_RX0])]
 mod app {
     use crate::hdcomm::{
-        self, dh_tx, enqueue_device_to_host, hd_rx, hd_rx_poll, DhDmaState, HdRxQueueConsumer,
+        self, dh_tx, enqueue_device_to_host, hd_rx, hd_rx_idle, DhDmaState, HdRxQueueConsumer,
         HdRxQueueProducer, RxCircDma,
     };
     use crate::trajectory::{CallbackKind, Controller, Status as ControllerStatus};
@@ -78,7 +78,6 @@ mod app {
 
         let hd_rx_pair: (HdRxQueueProducer, HdRxQueueConsumer) =
             hdcomm::receive_queue_split().unwrap();
-        hdcomm::dh_rx_poll_start();
 
         // Trajectory controller init.
         let trajectory_controller = {
@@ -314,7 +313,7 @@ mod app {
         #[task(binds = DMA1_CHANNEL3, local = [hd_rx, hd_rx_producer, accum: hdcomm_device::Accumulator = hdcomm_device::Accumulator::new()])]
         fn hd_rx(_: hd_rx::Context);
 
-        #[task()]
-        fn hd_rx_poll(_: hd_rx_poll::Context);
+        #[task(binds = USART3)]
+        fn hd_rx_idle(_: hd_rx_idle::Context);
     }
 }

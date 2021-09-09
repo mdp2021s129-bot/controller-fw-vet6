@@ -3,9 +3,12 @@ use controller_fw::board::startup::HdRx;
 use core::ops::Deref;
 use cortex_m::singleton;
 use hdcomm_core::message::Message;
-use rtic::rtic_monotonic;
 use stable_deref_trait::StableDeref;
-use stm32f1xx_hal::{dma, pac::Interrupt, prelude::*};
+use stm32f1xx_hal::{
+    dma,
+    pac::{self, Interrupt},
+    prelude::*,
+};
 
 /// Type of the receive buffer, the area of memory that can hold at least one
 /// (complete) incoming COBS-framed but not yet deserialized `Message`.
@@ -34,13 +37,6 @@ pub type HdRxQueueProducer = heapless::spsc::Producer<'static, Message, 8>;
 
 /// Message receive queue consumer type.
 pub type HdRxQueueConsumer = heapless::spsc::Consumer<'static, Message, 8>;
-
-/// Interval at which the Hd Rx DMA buffer will be checked for messages.
-///
-/// The buffer will also be checked for messages at the Half / Full transfer
-/// completion points. The polling mechanism is only to make sure that we get
-/// messages without delaying till the buffer becomes half / completely full.
-pub const HD_RX_POLL_INTERVAL: rtic_monotonic::Milliseconds = rtic_monotonic::Milliseconds(100_u32);
 
 /// Message transmit queue.
 static DH_TX_QUEUE: heapless::mpmc::MpMcQueue<Message, 8> = heapless::mpmc::MpMcQueue::new();
@@ -91,11 +87,6 @@ pub enum DhDmaState<PORT: dma::TransferPayload> {
     ///
     /// We use `std::mem::swap` to avoid the need for an extra `Option`.
     Swapped,
-}
-
-/// Starts polling the receive DMA every 100ms.
-pub fn dh_rx_poll_start() {
-    crate::app::hd_rx_poll::spawn_after(HD_RX_POLL_INTERVAL).unwrap();
 }
 
 /// Obtain handles to the receive queue.
@@ -176,7 +167,7 @@ pub fn dh_tx(cx: crate::app::dh_tx::Context) {
 ///
 /// - DMA circular transfer pointer wrapped around end of buffer.
 /// - DMA circular transfer pointer crossed half of the buffer.
-/// - Every 100ms.
+/// - After every line idle interrupt.
 ///
 /// Deserialization is also performed within this task, so it doesn't
 /// have elevated priority.
@@ -210,11 +201,19 @@ pub fn hd_rx(cx: crate::app::hd_rx::Context) {
     }
 }
 
-/// Host -> device receive poller.
+/// Host -> device receive idle handler.
 ///
-/// Triggered every 100ms to poll the receive DMA.
-pub fn hd_rx_poll(_: crate::app::hd_rx_poll::Context) {
+/// Simply pends the `hd_rx` handler to handle the incoming message.
+pub fn hd_rx_idle(_: crate::app::hd_rx_idle::Context) {
+    // No safe API to clear idle interrupt flag while DMA is ongoing.
+    unsafe {
+        let usart3 = pac::Peripherals::steal().USART3;
+        // Read registers as specified in the RM to clear the idle interrupt
+        // flag.
+        usart3.sr.read();
+        usart3.dr.read();
+    }
+
+    // Pend the host -> device receive handler to process the burst.
     rtic::pend(Interrupt::DMA1_CHANNEL3);
-    // Start self again to make this periodic.
-    crate::app::hd_rx_poll::spawn_after(HD_RX_POLL_INTERVAL).unwrap();
 }

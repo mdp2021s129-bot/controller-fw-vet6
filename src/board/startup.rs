@@ -190,7 +190,7 @@ pub fn startup(
     let (dh_tx, hd_rx) = {
         let tx = gpioc.pc10.into_alternate_push_pull(&mut gpioc.crh);
         let rx = gpioc.pc11.into_floating_input(&mut gpioc.crh);
-        let dh_periph = serial::Serial::usart3(
+        let mut dh_periph = serial::Serial::usart3(
             periph.USART3,
             (tx, rx),
             &mut afio.mapr,
@@ -201,6 +201,7 @@ pub fn startup(
             },
             clocks,
         );
+        dh_periph.listen(serial::Event::Idle);
         let (dh_tx_periph, hd_rx_periph) = dh_periph.split();
 
         let mut dh_tx = dh_tx_periph.with_dma(dma1.2);
