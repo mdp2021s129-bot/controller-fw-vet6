@@ -275,34 +275,36 @@ mod app {
         }
     }
 
-    /// Sensor dump handler.
-    #[task(local = [ahrs, analog])]
-    fn sensor_dump_test(cx: sensor_dump_test::Context) {
-        sensor_dump_test::spawn_after(Milliseconds(10_u32)).unwrap();
+    /// AHRS streamer.
+    ///
+    /// Continually sends AHRS samples to the host.
+    #[task(local = [ahrs], shared = [lrtimer])]
+    fn ahrs_streamer(mut cx: ahrs_streamer::Context) {
+        ahrs_streamer::spawn_after(Milliseconds(10_u32)).unwrap();
 
         let ahrs: &mut Ahrs = cx.local.ahrs;
-        let readings: Result<mpu9250::MargMeasurements<[f32; 3]>, _> = ahrs.all();
+        let readings: Result<mpu9250::UnscaledMargMeasurements<[i16; 3]>, _> = ahrs.unscaled_all();
         if let Ok(meas) = readings {
-            defmt::debug!(
-                "AHRS {},{},{},{},{},{},{},{},{},{}",
-                crate::app::monotonics::Dwt::now()
-                    .duration_since_epoch()
-                    .integer(),
-                meas.accel[0],
-                meas.accel[1],
-                meas.accel[2],
-                meas.gyro[0],
-                meas.gyro[1],
-                meas.gyro[2],
-                meas.mag[0],
-                meas.mag[1],
-                meas.mag[2],
-            );
-        }
+            use hdcomm_core::message::Message;
+            use hdcomm_core::stream::{AhrsBody, Message as StreamMessage, Payload};
 
-        let analog: &mut Analog = cx.local.analog;
-        let vin = analog.vin();
-        defmt::debug!("VIN: {:?}", defmt::Debug2Format(&vin));
+            let now = cx.shared.lrtimer.lock(|l| l.ms());
+            let ahrs_sample = AhrsBody {
+                acc: meas.accel,
+                gyro: meas.gyro,
+                mag: meas.mag,
+                time_ms: now,
+            };
+            if let Err(_) = enqueue_device_to_host(Message {
+                payload: hdcomm_core::message::Payload::Stream(StreamMessage {
+                    payload: Payload::Ahrs(ahrs_sample),
+                }),
+            }) {
+                defmt::warn!("DH TX queue full: AHRS sample dropped");
+            }
+        } else {
+            defmt::warn!("error reading AHRS")
+        }
     }
 
     // Out-of-module tasks.
