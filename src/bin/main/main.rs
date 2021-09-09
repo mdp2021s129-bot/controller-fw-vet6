@@ -310,10 +310,10 @@ mod app {
         #[task(binds = DMA1_CHANNEL2, local = [dh_tx])]
         fn dh_tx(_: dh_tx::Context);
 
-        #[task(binds = DMA1_CHANNEL3, local = [hd_rx, hd_rx_producer, accum: hdcomm_device::Accumulator = hdcomm_device::Accumulator::new()])]
+        #[task(binds = DMA1_CHANNEL3, local = [hd_rx, hd_rx_producer, accum: hdcomm_device::Accumulator = hdcomm_device::Accumulator::new()], priority = 15)]
         fn hd_rx(_: hd_rx::Context);
 
-        #[task(binds = USART3)]
+        #[task(binds = USART3, priority = 15)]
         fn hd_rx_idle(_: hd_rx_idle::Context);
     }
 }
