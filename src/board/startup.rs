@@ -15,7 +15,7 @@ use stm32f1xx_hal::{
     pwm::{self, Channel},
     qei::{self, QeiOptions},
     serial,
-    timer::{self, InputFilter, InputFpConfig, InternalFilterLength},
+    timer::{self, InputFpConfig},
 };
 
 pub type Wheels = GenericWheels<
@@ -108,8 +108,8 @@ pub fn startup(
         let in1_l = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
         let in2_l = gpioa.pa5.into_push_pull_output(&mut gpioa.crl);
 
-        let in1_r = gpioe.pe12.into_push_pull_output(&mut gpioe.crh);
-        let in2_r = gpioc.pc5.into_push_pull_output(&mut gpioc.crl);
+        let in1_r = gpioc.pc5.into_push_pull_output(&mut gpioc.crl);
+        let in2_r = gpioe.pe12.into_push_pull_output(&mut gpioe.crh);
 
         let pwm_l = gpioc.pc7.into_alternate_push_pull(&mut gpioc.crl);
         let pwm_r = gpioc.pc8.into_alternate_push_pull(&mut gpioc.crh);
@@ -125,11 +125,6 @@ pub fn startup(
                 &mut afio.mapr,
                 QeiOptions {
                     slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
-                    ifp_config: InputFpConfig {
-                        ti1_filter: InputFilter::Internal(InternalFilterLength::Eight),
-                        ti2_filter: InputFilter::Internal(InternalFilterLength::Eight),
-                        ..Default::default()
-                    },
                     ..Default::default()
                 },
             )
@@ -143,6 +138,10 @@ pub fn startup(
                 &mut afio.mapr,
                 QeiOptions {
                     slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
+                    ifp_config: InputFpConfig {
+                        ti1_invert: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
             )
