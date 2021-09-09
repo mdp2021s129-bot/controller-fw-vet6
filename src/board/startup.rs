@@ -196,7 +196,7 @@ pub fn startup(
             (tx, rx),
             &mut afio.mapr,
             serial::Config {
-                baudrate: 115200.bps(),
+                baudrate: 921600.bps(),
                 parity: serial::Parity::ParityNone,
                 stopbits: serial::StopBits::STOP1,
             },
