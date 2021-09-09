@@ -48,7 +48,7 @@ pub type Wheels = GenericWheels<
 >;
 
 pub type Steering = GenericSteering<
-    pwm::Pwm<pac::TIM1, timer::Tim1FullRemap, pwm::C2, Pin<Alternate<PushPull>, CRH, 'E', 11_u8>>,
+    pwm::Pwm<pac::TIM1, timer::Tim1FullRemap, pwm::C1, Pin<Alternate<PushPull>, CRH, 'E', 9_u8>>,
 >;
 
 pub type DhTx = dma::TxDma<serial::Tx<pac::USART3>, dma::dma1::C2>;
@@ -161,10 +161,10 @@ pub fn startup(
 
     // Steering initialization.
     let steering = {
-        let servo_ctrl = gpioe.pe11.into_alternate_push_pull(&mut gpioe.crh);
+        let servo_ctrl = gpioe.pe9.into_alternate_push_pull(&mut gpioe.crh);
         let servo_ctrl_pwm =
             timer::Timer::tim1(periph.TIM1, &clocks).pwm(servo_ctrl, &mut afio.mapr, 50.hz());
-        Steering::new(servo_ctrl_pwm, Channel::C2)
+        Steering::new(servo_ctrl_pwm, Channel::C1)
     };
 
     // Analog sensors initialization.
