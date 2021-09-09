@@ -15,7 +15,7 @@ use stm32f1xx_hal::{
     pwm::{self, Channel},
     qei::{self, QeiOptions},
     serial,
-    timer::{self, InputFpConfig},
+    timer::{self, InputFilter, InputFpConfig, InternalFilterLength},
 };
 
 pub type Wheels = GenericWheels<
@@ -125,6 +125,11 @@ pub fn startup(
                 &mut afio.mapr,
                 QeiOptions {
                     slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
+                    ifp_config: InputFpConfig {
+                        ti1_filter: InputFilter::Internal(InternalFilterLength::Eight),
+                        ti2_filter: InputFilter::Internal(InternalFilterLength::Eight),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
             )
@@ -140,6 +145,8 @@ pub fn startup(
                     slave_mode: stm32f1xx_hal::qei::SlaveMode::EncoderMode3,
                     ifp_config: InputFpConfig {
                         ti1_invert: true,
+                        ti1_filter: InputFilter::Internal(InternalFilterLength::Eight),
+                        ti2_filter: InputFilter::Internal(InternalFilterLength::Eight),
                         ..Default::default()
                     },
                     ..Default::default()
