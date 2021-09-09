@@ -21,8 +21,8 @@ mod app {
     use controller_fw::board::startup::{self, Ahrs, DhTx, Sr04EchoPin, Sr04TriggerPin};
     use cortex_m::singleton;
     use hdcomm_core::rpc::{
-        MoveRepBody, MoveStatusRepBody, PidParamUpdateRepBody, PidParamUpdateReqBody, PidParams,
-        PingRepBody, RawTeleOpRepBody,
+        FrontDistanceRepBody, MoveRepBody, MoveStatusRepBody, PidParamUpdateRepBody,
+        PidParamUpdateReqBody, PidParams, PingRepBody, RawTeleOpRepBody,
     };
     use rtic::time::duration::Milliseconds;
     use stm32f1xx_hal::{gpio::ExtiPin, prelude::*};
@@ -94,7 +94,8 @@ mod app {
         let front_distance = Sr04::new(front_distance_trig);
         front_sensor_auto_trigger::spawn().unwrap();
 
-        // sensor_dump_test::spawn_after(Milliseconds(1000_u32)).unwrap();
+        // AHRS sampler init.
+        ahrs_streamer::spawn().unwrap();
 
         defmt::info!("init complete");
         (
@@ -120,7 +121,7 @@ mod app {
         )
     }
 
-    #[idle(local = [hd_rx_consumer], shared = [trajectory_controller, lrtimer])]
+    #[idle(local = [hd_rx_consumer], shared = [trajectory_controller, lrtimer, front_distance])]
     fn idle(mut cx: idle::Context) -> ! {
         loop {
             if let Some(msg) = cx.local.hd_rx_consumer.dequeue() {
@@ -199,6 +200,26 @@ mod app {
                             RawTeleOpRepBody::Busy
                         },
                     )),
+                    RPCPayload::FrontDistanceReq(_) => {
+                        let now = cx.shared.lrtimer.lock(|t| t.now());
+                        let measurement = cx
+                            .shared
+                            .front_distance
+                            .lock(|f| f.measurement(now).cloned());
+                        let body = match measurement {
+                            Some(m) => FrontDistanceRepBody {
+                                distance: m.result.ok().map(|v| v.to_num()),
+                                end_time_ms: m.end.duration_since_epoch().integer(),
+                                start_time_ms: m.start.duration_since_epoch().integer(),
+                            },
+                            None => FrontDistanceRepBody {
+                                distance: None,
+                                end_time_ms: 0,
+                                start_time_ms: 0,
+                            },
+                        };
+                        Some(RPCPayload::FrontDistanceRep(body))
+                    }
                     _ => None,
                 };
 
