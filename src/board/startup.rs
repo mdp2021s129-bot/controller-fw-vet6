@@ -7,8 +7,8 @@ use cortex_m::Peripherals as CorePeripherals;
 use stm32f1xx_hal::{
     dma,
     gpio::{
-        Alternate, ErasedPin, ExtiPin, Floating, Input, OpenDrain, Output, Pin, PinState, PushPull,
-        CRH, CRL,
+        Alternate, Edge, ErasedPin, ExtiPin, Floating, Input, OpenDrain, Output, Pin, PinState,
+        PushPull, CRH, CRL,
     },
     i2c, pac,
     prelude::*,
@@ -185,7 +185,12 @@ pub fn startup(
     let echo = {
         let mut echo = gpiod.pd4.into_floating_input(&mut gpiod.crl);
         echo.make_interrupt_source(&mut afio);
-        echo.enable_interrupt(&periph.EXTI);
+        echo.trigger_on_edge(&periph.EXTI, Edge::RisingFalling);
+        // Enable ONLY after the pin is connected to the sensor!
+        // Spurious interrupts otherwise due to floating input pin.
+        // For 5V input on FT PD4, the internal pull-up/down resistors cannot
+        // be used. Doing so on an input > VDD + 0.3V may damage the micro.
+        // echo.enable_interrupt(&periph.EXTI);
         echo
     };
 
