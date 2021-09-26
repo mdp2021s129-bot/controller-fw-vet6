@@ -27,7 +27,7 @@ mod app {
     use rtic::time::duration::Milliseconds;
     use stm32f1xx_hal::{gpio::ExtiPin, prelude::*};
 
-    #[monotonic(binds = SysTick, default = true)]
+    #[monotonic(binds = SysTick, default = true, priority = 16)]
     type Dwt = RTICMonotonic;
 
     #[shared]
@@ -93,6 +93,9 @@ mod app {
         // Front distance sensor init.
         let front_distance = Sr04::new(front_distance_trig);
         front_sensor_auto_trigger::spawn().unwrap();
+
+        let rawmag: [u8; 3] = ahrs.raw_mag_sensitivity_adjustments();
+        defmt::info!("mag sens adj: {}", rawmag);
 
         // AHRS sampler init.
         ahrs_streamer::spawn().unwrap();
@@ -240,7 +243,7 @@ mod app {
     }
 
     /// Task meant to call back into the trajectory controller.
-    #[task(shared = [trajectory_controller], capacity = 2)]
+    #[task(shared = [trajectory_controller], capacity = 2, priority = 16)]
     fn trajectory_controller_callback(
         mut cx: trajectory_controller_callback::Context,
         kind: CallbackKind,
