@@ -36,13 +36,13 @@ struct MoveContext {
 impl MoveContext {
     /// Creates new move context.
     ///
-    /// The move state is initialized to the `SteeringSetup` state.
+    /// The move state is initialized to the `SteeringReset` state.
     fn new(req: MoveReqBody, time: LrInstant) -> Self {
         Self {
             request: req,
             start: time,
             spawn_handle: None,
-            state: MoveState::SteeringSetup,
+            state: MoveState::SteeringReset,
         }
     }
 }
@@ -50,9 +50,13 @@ impl MoveContext {
 /// State of a move.
 #[derive(Debug, Clone, PartialEq)]
 enum MoveState {
+    /// The controller is resetting the steering.
+    ///
+    /// It exists in this state for 1/2 the steering setup time.
+    SteeringReset,
     /// The controller is setting up the steering.
     ///
-    /// It exists in this state for the steering setup time.
+    /// It exists in this state for 1/2 the steering setup time.
     SteeringSetup,
     /// The controller is actively driving the motors.
     ///
@@ -217,14 +221,16 @@ impl Controller {
         }
 
         let handle = crate::app::trajectory_controller_callback::spawn_after(
-            Milliseconds(req.steering_setup_ms as u32),
+            Milliseconds((req.steering_setup_ms as u32) / 2),
             CallbackKind::Statemachine,
         )
         .debugless_unwrap();
 
         // Stop wheels just in case a teleop was being performed.
         self.stop_wheels();
-        self.steering.set(Angle::from_num(req.steering));
+        self.steering.set(Angle::from_num(
+            (((req.steering + 0.46) + 0.35) % 0.7) - 0.46,
+        ));
         let mut move_ctx = MoveContext::new(req, time);
         move_ctx.spawn_handle = Some(handle);
         let new_state = State::Active(move_ctx);
@@ -332,6 +338,20 @@ impl Controller {
                     State::Idle => panic!("Statemachine callback received when idle"),
                     State::Active(ref mut move_context) => {
                         match &mut move_context.state {
+                            MoveState::SteeringReset => {
+                                self.steering
+                                    .set(Angle::from_num(move_context.request.steering));
+                                move_context.state = MoveState::SteeringSetup;
+                                move_context.spawn_handle = Some(
+                                    crate::app::trajectory_controller_callback::spawn_after(
+                                        Milliseconds(
+                                            (move_context.request.steering_setup_ms as u32) / 2,
+                                        ),
+                                        CallbackKind::Statemachine,
+                                    )
+                                    .debugless_unwrap(),
+                                );
+                            }
                             MoveState::SteeringSetup => {
                                 // We need to transition from the steering setup state to the
                                 // driving state.

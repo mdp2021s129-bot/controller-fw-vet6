@@ -156,7 +156,7 @@ pub fn startup(
 
         Wheels::new(
             pwm,
-            40000.hz(),
+            1000.hz(),
             [
                 [in1_l.erase(), in2_l.erase()],
                 [in1_r.erase(), in2_r.erase()],
