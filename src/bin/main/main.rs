@@ -22,12 +22,12 @@ mod app {
     use cortex_m::singleton;
     use hdcomm_core::rpc::{
         FrontDistanceRepBody, MoveRepBody, MoveStatusRepBody, PidParamUpdateRepBody,
-        PidParamUpdateReqBody, PidParams, PingRepBody, RawTeleOpRepBody,
+        PidParamUpdateReqBody, PidParams, PingRepBody, RawTeleOpRepBody, VinReadingRepBody,
     };
     use rtic::time::duration::Milliseconds;
     use stm32f1xx_hal::{gpio::ExtiPin, prelude::*};
 
-    #[monotonic(binds = SysTick, default = true)]
+    #[monotonic(binds = SysTick, default = true, priority = 16)]
     type Dwt = RTICMonotonic;
 
     #[shared]
@@ -94,8 +94,10 @@ mod app {
         let front_distance = Sr04::new(front_distance_trig);
         front_sensor_auto_trigger::spawn().unwrap();
 
+        let rawmag: [u8; 3] = ahrs.raw_mag_sensitivity_adjustments();
+        defmt::info!("mag sens adj: {}", rawmag);
         // AHRS sampler init.
-        ahrs_streamer::spawn().unwrap();
+        //ahrs_streamer::spawn().unwrap();
 
         defmt::info!("init complete");
         (
@@ -121,7 +123,7 @@ mod app {
         )
     }
 
-    #[idle(local = [hd_rx_consumer], shared = [trajectory_controller, lrtimer, front_distance])]
+    #[idle(local = [hd_rx_consumer, analog], shared = [trajectory_controller, lrtimer, front_distance])]
     fn idle(mut cx: idle::Context) -> ! {
         loop {
             if let Some(msg) = cx.local.hd_rx_consumer.dequeue() {
@@ -220,6 +222,14 @@ mod app {
                         };
                         Some(RPCPayload::FrontDistanceRep(body))
                     }
+                    RPCPayload::VinReadingReq(_) => {
+                        let now = cx.shared.lrtimer.lock(|t| t.ms());
+                        let vin = cx.local.analog.vin();
+                        Some(RPCPayload::VinReadingRep(VinReadingRepBody {
+                            time_ms: now,
+                            vin: vin.to_num(),
+                        }))
+                    }
                     _ => None,
                 };
 
@@ -240,7 +250,7 @@ mod app {
     }
 
     /// Task meant to call back into the trajectory controller.
-    #[task(shared = [trajectory_controller], capacity = 2)]
+    #[task(shared = [trajectory_controller], capacity = 2, priority = 16)]
     fn trajectory_controller_callback(
         mut cx: trajectory_controller_callback::Context,
         kind: CallbackKind,
